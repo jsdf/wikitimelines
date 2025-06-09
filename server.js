@@ -1,22 +1,29 @@
 /* Setting things up. */
 const path = require("path");
 const express = require("express");
-const Twit = require("twit");
 const cheerio = require("cheerio");
 const httpRequest = require("request");
 const url = require("url");
 const wiki = require("wikijs").default;
+const { BskyAgent } = require('@atproto/api');
 
 const app = express();
 app.use(express.static("public"));
 
 /* Be sure to update the .env file with your API keys. See how to get them: https://botwiki.org/tutorials/how-to-create-a-twitter-app */
-const T = new Twit({
-  consumer_key: process.env.CONSUMER_KEY,
-  consumer_secret: process.env.CONSUMER_SECRET,
-  access_token: process.env.ACCESS_TOKEN,
-  access_token_secret: process.env.ACCESS_TOKEN_SECRET
-});
+// Remove Twit and Twitter setup
+// Setup Bluesky agent
+const bsky = new BskyAgent({ service: 'https://bsky.social' });
+
+// Authenticate Bluesky agent
+async function blueskyLogin() {
+  if (!bsky.session) {
+    await bsky.login({
+      identifier: process.env.BLUESKY_HANDLE,
+      password: process.env.BLUESKY_PASSWORD
+    });
+  }
+}
 
 // downloads image from an external URL and returns it as base64-encoded data
 function getImage(imgurl) {
@@ -113,67 +120,55 @@ async function getRandomPageImage() {
 const TWENTY_FOUR_HOURS_IN_MILLISECONDS = 8.64e+7;
 
 // was the last tweet from the bot account in the last 24 hrs?
-async function hasTweetedAlreadyTooRecently() {
-  const timeline = await T.get("statuses/user_timeline", {
-    screen_name: process.env.BOT_SCREEN_NAME,
-    count: 1
+async function hasPostedAlreadyTooRecently() {
+  await blueskyLogin();
+  const feed = await bsky.getAuthorFeed({
+    actor: process.env.BLUESKY_HANDLE,
+    limit: 1
   });
-  const tweet = timeline.data[0];
-  if (tweet && tweet.created_at) {
-    const tweetTime = +new Date(tweet.created_at);
+  const post = feed.data.feed[0];
+  if (post && post.post && post.post.indexedAt) {
+    const postTime = +new Date(post.post.indexedAt);
     const longAgoEnoughTime = +new Date() - TWENTY_FOUR_HOURS_IN_MILLISECONDS;
-    return !(tweetTime > 0 && tweetTime < longAgoEnoughTime);
+    return !(postTime > 0 && postTime < longAgoEnoughTime);
   }
   return false;
 }
 
 // decide if the bot should tweet, get the content to tweet, and then post it via the twitter api
-async function doTweet(resp) {
-  if (await hasTweetedAlreadyTooRecently()) {
-    return resp.send('already tweeted today');
+async function doPost(resp) {
+  if (await hasPostedAlreadyTooRecently()) {
+    return resp.send('already posted today');
   }
-
   const page = await getRandomPageImage();
-
   const imageDataB64 = await getImage(page.imageUrl);
-
-  // first we must post the media to Twitter
-  const uploadedImage = await T.post("media/upload", {
-    media_data: imageDataB64
+  await blueskyLogin();
+  // Upload image to Bluesky
+  const imgRes = await bsky.uploadBlob(Buffer.from(imageDataB64, 'base64'), {
+    encoding: 'image/jpeg',
   });
-  // now we can assign alt text to the media, for use by screen readers and
-  // other text-based presentations and interpreters
-  const mediaIdStr = uploadedImage.data.media_id_string;
-  const altText = page.title;
-  const meta_params = {
-    media_id: mediaIdStr,
-    alt_text: { text: altText }
-  };
-
-  await T.post("media/metadata/create", meta_params);
-
-  // now we can reference the media and post a tweet (media will attach to the tweet)
-  const params = {
-    status: page.title,
-    media_ids: [mediaIdStr]
-  };
-
-  await T.post("statuses/update", params);
-
+  // Post to Bluesky
+  await bsky.post({
+    text: page.title,
+    embed: {
+      $type: 'app.bsky.embed.images',
+      images: [{ image: imgRes.data.blob, alt: page.title }]
+    }
+  });
   resp.sendStatus(200);
 }
 
 // external-facing http routes
 
-app.get('/data', (request, response) => {
+app.get('/data', async (request, response) => {
   const page = await getRandomPageImage();
 
-  response.json(page)
-})
+  response.json(page);
+});
 
 /* You can use uptimerobot.com or a similar site to hit your /BOT_ENDPOINT to wake up your app and make your Twitter bot tweet. */
 app.all("/" + process.env.BOT_ENDPOINT, function(request, response) {
-  doTweet(response).catch(err => {
+  doPost(response).catch(err => {
     response.sendStatus(500);
     console.log("Error!");
     console.log(err);
@@ -183,7 +178,7 @@ app.all("/" + process.env.BOT_ENDPOINT, function(request, response) {
 app.all("/" + process.env.TEST_ENDPOINT, (request, resp) => {
   Promise.all([
     getRandomPageImage(),
-    hasTweetedAlreadyTooRecently(),
+    hasPostedAlreadyTooRecently(),
     getPages(),
   ])
     .then(([data, hasTweeted, pages]) => {
