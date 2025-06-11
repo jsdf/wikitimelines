@@ -1,7 +1,8 @@
 name = "wikitimelines"
-type = "javascript"
 main = "worker.js"
 compatibility_date = "2024-06-09"
 
-[vars]
-BOT_ENDPOINT = "your-bot-endpoint"
+[[kv_namespaces]]
+binding = "WIKITIMELINES_KV"
+id = "4f3a072717264388bf0f1eb02cc253c8"
+preview_id = "a5c1791d72744805bb00f11e07ddd419"
