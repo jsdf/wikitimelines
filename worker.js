@@ -87,7 +87,7 @@ async function handlePost(env) {
   }
 }
 
-async function handleTestPost() {
+async function handlePreview() {
   const page = await getRandomPageWithImage();
   if (!page) {
     return new Response('No timeline image found for test post after several tries.', { status: 500 });
@@ -119,16 +119,29 @@ async function handleTestPost() {
   }
 }
 
+async function handleIndex() {
+  const routes = [
+    { path: '/post', description: 'Triggers a post to Bluesky if not already posted today.' },
+    { path: '/preview', description: 'Prepares test post data without actually posting.' }
+  ];
+  return new Response(JSON.stringify(routes, null, 2), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200
+  });
+}
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    if (url.pathname === '/') {
+      return handleIndex();
+    }
     if (url.pathname === `/post`) {
       return handlePost(env);
     }
-    if (url.pathname === '/test-post') {
-      return handleTestPost();
+    if (url.pathname === '/preview') {
+      return handlePreview();
     }
     return new Response('Not found', { status: 404 });
   },
