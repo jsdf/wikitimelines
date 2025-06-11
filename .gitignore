@@ -10,16 +10,21 @@ worker/
 .env
 .env.*
 
+# Wrangler config
+wrangler.toml.local
+
+# VSCode settings
+.vscode/
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# VSCode settings
-.vscode/
-
 # Mac system files
 .DS_Store
 
-# Wrangler config (if generated locally)
-wrangler.toml.local
+# Test coverage
+coverage/
+
+.wrangler

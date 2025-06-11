@@ -1,0 +1,7 @@
+name = "wikitimelines"
+type = "javascript"
+main = "worker.js"
+compatibility_date = "2024-06-09"
+
+[vars]
+BOT_ENDPOINT = "your-bot-endpoint"

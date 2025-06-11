@@ -50,21 +50,37 @@ async function postToBluesky(env, page, imageDataB64) {
 
 export default {
   async fetch(request, env, ctx) {
-    if (new URL(request.url).pathname !== `/${env.BOT_ENDPOINT}`) {
-      return new Response('Not found', { status: 404 });
-    }
-    // Only post once per 24 hours: use KV or D1 for persistence in production
-    // For demo, always post
-    const pages = await getPages();
-    for (let i = 0; i < 5; i++) {
-      const pageTitle = pages[Math.floor(Math.random() * pages.length)];
-      const page = await getRandomPageImage(pageTitle);
-      if (page) {
-        const imageDataB64 = await getImageBase64(page.imageUrl);
-        await postToBluesky(env, page, imageDataB64);
-        return new Response('Posted to Bluesky!', { status: 200 });
+    const url = new URL(request.url);
+    if (url.pathname === `/${env.BOT_ENDPOINT}`) {
+      // Only post once per 24 hours: use KV or D1 for persistence in production
+      // For demo, always post
+      const pages = await getPages();
+      for (let i = 0; i < 5; i++) {
+        const pageTitle = pages[Math.floor(Math.random() * pages.length)];
+        const page = await getRandomPageImage(pageTitle);
+        if (page) {
+          const imageDataB64 = await getImageBase64(page.imageUrl);
+          await postToBluesky(env, page, imageDataB64);
+          return new Response('Posted to Bluesky!', { status: 200 });
+        }
       }
+      return new Response('No timeline image found after several tries.', { status: 500 });
     }
-    return new Response('No timeline image found after several tries.', { status: 500 });
+    if (url.pathname === '/preview') {
+      // Preview endpoint: show what would be posted
+      const pages = await getPages();
+      for (let i = 0; i < 5; i++) {
+        const pageTitle = pages[Math.floor(Math.random() * pages.length)];
+        const page = await getRandomPageImage(pageTitle);
+        if (page) {
+          return new Response(JSON.stringify({ title: page.title, imageUrl: page.imageUrl }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      return new Response('No timeline image found after several tries.', { status: 500 });
+    }
+    return new Response('Not found', { status: 404 });
   }
 };
