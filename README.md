@@ -1,8 +1,6 @@
 Bluesky Wikipedia Timeline Graphics Bot
 =======================================
 
-![Posting](https://cdn.gomix.com/4032b241-bff8-473e-aa6b-eb0c92a4bd06%2Ftweeting.gif)
-
 This project is a bot that automatically posts timeline graphics from Wikipedia articles to Bluesky. It works by selecting a random article from a specific Wikipedia category, scraping the page for a timeline image, and posting the image along with the article title to your Bluesky account.
 
 ## How it works
@@ -12,17 +10,18 @@ This project is a bot that automatically posts timeline graphics from Wikipedia 
 - Posts the image and article title to Bluesky as a new post.
 - Ensures it only posts once per 24 hours.
 
-## Setup Instructions
+## Setup Instructions for Cloudflare Worker
 
 1. Create a Bluesky account at https://bsky.app/.
-2. Add your Bluesky handle and app password to the `.env` file.
-3. Set the `BOT_ENDPOINT` environment variable (e.g., `post`).
-4. Optionally, set up a free service like [Uptime Robot](https://uptimerobot.com/) to trigger your bot every 25+ minutes. Use `https://YOUR_PROJECT_NAME.glitch.me/BOT_ENDPOINT` as the URL to ping.
+2. Set the following environment variables in your Cloudflare Worker settings:
+    - `BLUESKY_HANDLE`: Your Bluesky handle (e.g. `yourname.bsky.social`)
+    - `BLUESKY_PASSWORD`: Your Bluesky app password (it is recommended to use an app password for security).
+3. Optionally, set up a cron trigger in your Cloudflare Worker settings to run the bot on a schedule (e.g., once a day). The bot exposes a `/post` endpoint that triggers a new post.
 
 ## Customization
 
-- You can modify the Wikipedia category or filtering logic in `server.js` to change which articles are selected.
-- The bot can be further customized to post different content or on a different schedule.
+- You can modify the Wikipedia category or filtering logic in `worker.js` to change which articles are selected.
+- The bot can be further customized to post different content or on a different schedule by modifying `worker.js`.
 
 ## Resources
 
@@ -32,25 +31,21 @@ This project is a bot that automatically posts timeline graphics from Wikipedia 
 
 ## Deploying as a Cloudflare Worker
 
-This bot can be deployed as a [Cloudflare Worker](https://developers.cloudflare.com/workers/). The Worker version is in `worker.js`.
-
-### Environment Variables
-
-Set these environment variables in your Cloudflare Worker:
-- `BLUESKY_HANDLE`: Your Bluesky handle (e.g. `yourname.bsky.social`)
-- `BLUESKY_PASSWORD`: Your Bluesky app password
-- `BOT_ENDPOINT`: The endpoint path to trigger the bot (e.g. `post`)
+This bot is designed to be deployed as a [Cloudflare Worker](https://developers.cloudflare.com/workers/). The Worker code is in `worker.js`.
 
 ### Deploy Steps
 
-1. Install [Wrangler](https://developers.cloudflare.com/workers/wrangler/).
-2. Add your environment variables to your `wrangler.toml` or Cloudflare dashboard.
-3. Deploy with:
+1. Install [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/get-started/).
+2. Configure your `wrangler.toml` file with your Cloudflare account details and worker name.
+3. Add your `BLUESKY_HANDLE` and `BLUESKY_PASSWORD` as secrets to your worker using the Wrangler CLI or the Cloudflare dashboard:
    ```sh
-   wrangler publish
+   npx wrangler secret put BLUESKY_HANDLE
+   npx wrangler secret put BLUESKY_PASSWORD
    ```
-4. Trigger your bot by visiting `https://<your-worker-subdomain>/<BOT_ENDPOINT>`
-
-**Powered by [Glitch](https://glitch.com)**
+4. Deploy with:
+   ```sh
+   npx wrangler deploy
+   ```
+5. To trigger your bot manually, you can visit `https://<your-worker-name>.<your-account-subdomain>.workers.dev/post`. For automated posting, set up a cron trigger in the Cloudflare dashboard for your worker.
 
 \ ゜o゜)ノ

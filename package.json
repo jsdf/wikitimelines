@@ -2,28 +2,21 @@
   "name": "glitch-twitterbot",
   "version": "0.0.1",
   "description": "Beep beep tweet!",
-  "main": "server.js",
+  "main": "worker.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node worker.js"
   },
   "dependencies": {
-    "@atproto/api": "^0.14.22",
-    "cheerio": "^0.22.0",
-    "express": "^4.14.0",
-    "node-wikipedia": "^0.0.2",
-    "request": "^2.87.0",
-    "wikijs": "^4.8.0"
+    "@atproto/api": "^0.14.22"
   },
   "repository": {
     "url": ""
   },
   "keywords": [
     "node",
-    "glitch",
-    "gomix",
-    "hyperdev",
-    "twitter",
-    "twitterbot",
+    "cloudflare",
+    "worker",
+    "bluesky",
     "bot"
   ]
 }
