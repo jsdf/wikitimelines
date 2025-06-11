@@ -28,9 +28,20 @@ async function getRandomPageImage(pageTitle) {
 }
 
 async function getImageBase64(imgurl) {
-  const res = await fetch(imgurl);
+  const headers = new Headers();
+  // Comply with Wikimedia User-Agent policy: https://meta.wikimedia.org/wiki/User-Agent_policy
+  // It's good practice to make this informative, e.g., "WikiTimelinesBot/1.0 (https://your-worker-url-or-project-page; your-contact-email)"
+  // For now, a generic one that still identifies it as a script.
+  headers.append('User-Agent', 'WikiTimelinesCloudflareWorker/1.0 (wikitimelines.bsky.social; https://github.com/jsdf/wikitimelines)');
+
+  const res = await fetch(imgurl, { headers: headers });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image ${imgurl}: ${res.status} ${res.statusText}`);
+  }
+  const contentType = res.headers.get('Content-Type') || 'application/octet-stream'; // Default if not present
   const arrayBuffer = await res.arrayBuffer();
-  return btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+  return { base64, contentType };
 }
 
 // Helper function to get a random page with its image
@@ -46,11 +57,20 @@ async function getRandomPageWithImage() {
   return null; // No page with an image found
 }
 
-async function postToBluesky(env, page, imageDataB64) {
+async function postToBluesky(env, page, imageDataB64, contentType) {
+  if (!env.BLUESKY_HANDLE) {
+    console.error('BLUESKY_HANDLE secret not set.');
+    throw new Error('Bluesky handle (identifier) is not configured as a secret.');
+  }
+  if (!env.BLUESKY_PASSWORD) {
+    console.error('BLUESKY_PASSWORD secret not set.');
+    throw new Error('Bluesky password is not configured as a secret.');
+  }
+
   const bsky = new BskyAgent({ service: 'https://bsky.social' });
   await bsky.login({ identifier: env.BLUESKY_HANDLE, password: env.BLUESKY_PASSWORD });
   const imgRes = await bsky.uploadBlob(Uint8Array.from(atob(imageDataB64), c => c.charCodeAt(0)), {
-    encoding: 'image/jpeg',
+    encoding: contentType, // Use dynamic content type
   });
   await bsky.post({
     text: page.title,
@@ -65,9 +85,9 @@ async function handlePost(env) {
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const lastPostDate = await env.WIKITIMELINES_KV.get(`lastPostDate`);
 
-  if (lastPostDate === today) {
-    return new Response('Already posted today.', { status: 429 });
-  }
+  // if (lastPostDate === today) {
+  //   return new Response('Already posted today.', { status: 429 });
+  // }
 
   const page = await getRandomPageWithImage();
   if (!page) {
@@ -75,8 +95,11 @@ async function handlePost(env) {
   }
 
   try {
-    const imageDataB64 = await getImageBase64(page.imageUrl);
-    await postToBluesky(env, page, imageDataB64);
+    const imageInfo = await getImageBase64(page.imageUrl);
+    if (!imageInfo || !imageInfo.base64) {
+      return new Response('Failed to get image data.', { status: 500 });
+    }
+    await postToBluesky(env, page, imageInfo.base64, imageInfo.contentType);
     // Store the date of successful post with a TTL of 25 hours
     // 25 hours = 25 * 60 * 60 = 90000 seconds
     await env.WIKITIMELINES_KV.put(`lastPostDate`, today, { expirationTtl: 90000 });
@@ -94,7 +117,10 @@ async function handlePreview() {
   }
 
   try {
-    const imageDataB64 = await getImageBase64(page.imageUrl);
+    const imageInfo = await getImageBase64(page.imageUrl);
+    if (!imageInfo || !imageInfo.base64) {
+      return new Response('Failed to get image data for preview.', { status: 500 });
+    }
     // Simulate what would be posted
     const postData = {
       text: page.title,
@@ -102,7 +128,8 @@ async function handlePreview() {
         $type: 'app.bsky.embed.images',
         images: [{ image: "BLOB_DATA_WOULD_BE_HERE", alt: page.title }] // Not uploading blob for test
       },
-      imageDataBase64Length: imageDataB64.length // For verification
+      imageDataBase64Length: imageInfo.base64.length, // For verification
+      imageContentType: imageInfo.contentType // Added for more info
     };
     return new Response(JSON.stringify({
       message: 'Test post data prepared successfully.',
