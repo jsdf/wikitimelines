@@ -131,5 +131,8 @@ export default {
       return handleTestPost();
     }
     return new Response('Not found', { status: 404 });
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handlePost(env));
   }
 };
